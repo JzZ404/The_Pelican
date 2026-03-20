@@ -298,4 +298,4 @@ No retraining is needed — YOLOv8n already recognizes all 80 COCO classes. You'
 
 ## Team
 
-Built at the University of Washington Global Innovation Exchange (GIX) — TECHIN 516 Robotics.
+Built at the University of Washington Global Innovation Exchange (GIX) by Aaron Yeung & Joyce Zhou— TECHIN 516 Robotics.
