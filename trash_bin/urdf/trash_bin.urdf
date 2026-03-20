@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="trash_bin">
+
+  <!-- Dummy root link (required by KDL) -->
+  <link name="world"/>
+
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Base Link -->
+  <link name="base_link">
+
+    <!-- Visual mesh for display -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://trash_bin/meshes/joyce.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="pla_gray">
+        <color rgba="0.7 0.7 0.7 1.0"/>
+      </material>
+    </visual>
+
+    <!-- Simplified collision geometry -->
+    <collision>
+      <origin xyz="0 0 0.35" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.70 0.60 0.70"/>
+      </geometry>
+    </collision>
+
+    <!-- Inertial properties -->
+    <!-- Total mass: 3.0 kg -->
+    <!-- Inertia approximated as solid box 0.7 x 0.6 x 0.7 m: -->
+    <!--   Ixx = m/12 * (y^2 + z^2) = 3/12 * (0.36 + 0.49) = 0.2125 -->
+    <!--   Iyy = m/12 * (x^2 + z^2) = 3/12 * (0.49 + 0.49) = 0.2450 -->
+    <!--   Izz = m/12 * (x^2 + y^2) = 3/12 * (0.49 + 0.36) = 0.2125 -->
+    <inertial>
+      <origin xyz="0 0 0.35" rpy="0 0 0"/>
+      <mass value="3.0"/>
+      <inertia ixx="0.2125" ixy="0" ixz="0"
+               iyy="0.2450" iyz="0"
+               izz="0.2125"/>
+    </inertial>
+
+  </link>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+</robot>
