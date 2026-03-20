@@ -1,14 +1,181 @@
 # The Pelican
 
-TurtleBot3 autonomous bottle-tracking robot with a motorized lid. The robot wanders, detects target objects (bottles, cups, and wine glasses) using YOLOv8, tracks and approaches them, then picks them up with a Dynamixel-powered motors
+TurtleBot3 autonomous bottle-tracking robot with a motorized lid. The robot wanders, detects target objects (bottles, cups, and wine glasses) using YOLOv8, tracks and approaches them, then picks them up with Dynamixel-powered motors.
+
+## Feature Checklist
+
+| Requirement | Status | Details |
+|---|---|---|
+| **URDF robot description** | ✅ | Custom URDF extends TurtleBot3 Waffle with lid motor joint (`gix`). Published via `robot_state_publisher`. See [URDF Description](#urdf-robot-description). |
+| **Application code** | ✅ | `bottle.py` — autonomous detection, tracking, and lid actuation node. See [Application Code](#application-code-bottlepy). |
+| **Launch file** | ✅ | `full_bringup.launch.py` — single launch file brings up hardware drivers, URDF, joint states, and LiDAR. See [Launch Files](#launch-files). |
+| **LiDAR with sufficient FOV for mapping** | ✅ | LDS-01 LiDAR provides **360° FOV** at 5 Hz, publishing on `/scan`. Used for obstacle avoidance and compatible with SLAM Toolbox for full map generation. See [LiDAR & Mapping](#lidar--mapping). |
+| **Single-command demo** | ✅ | Robot-side: `ros2 launch ~/full_bringup.launch.py`. Desktop-side: `ros2 launch yolo_bringup yolo.launch.py` + `ros2 run final bottle`. See [Quick Start Demo](#quick-start-demo-single-command). |
+| **Teleoperation support** | ✅ | Standard `turtlebot3_teleop` keyboard teleop works alongside or instead of autonomous mode. See [Teleoperation](#teleoperation). |
+| **Robot body visible in RViz** | ✅ | Full robot mesh and TF tree visualized in RViz2 via URDF + `robot_state_publisher`. Includes base, wheels, LiDAR, camera, and lid joint. See [RViz Visualization](#rviz-visualization). |
+
+---
+
+## URDF Robot Description
+
+The Pelican uses a **custom URDF** that extends the standard TurtleBot3 Waffle model with an additional revolute joint for the lid motor (Dynamixel Motor ID 3). The URDF defines the following links and joints:
+
+- `base_footprint` → `base_link` (fixed) — robot chassis
+- `base_link` → `wheel_left_link` / `wheel_right_link` (continuous) — drive wheels
+- `base_link` → `caster_back_link` (fixed) — rear caster
+- `base_link` → `base_scan` (fixed) — LDS-01 LiDAR mount
+- `base_link` → `camera_link` (fixed) — USB camera mount
+- `base_link` → `gix_link` (revolute) — **lid motor joint**, controlled via `/gix_controller/joint_trajectory`
+
+The URDF is loaded by `robot_state_publisher` at launch, which publishes the full TF tree and makes the robot body available for RViz visualization.
+
+```bash
+# View the URDF TF tree
+ros2 run tf2_tools view_frames
+```
+
+## Application Code (bottle.py)
+
+`bottle.py` is the main application node. It implements a full autonomous behavior pipeline:
+
+**Subscriptions:**
+- `/yolo/detections` (DetectionArray) — YOLOv8 bounding box detections
+- `/scan` (LaserScan) — 360° LiDAR data for obstacle avoidance
+
+**Publishers:**
+- `/cmd_vel` (Twist) — velocity commands to the robot base
+- `/gix_controller/joint_trajectory` (JointTrajectory) — lid motor position commands
+
+**Behavior state machine:**
+
+```
+WANDER → (object detected) → TRACK → (aligned & close) → AIM
+  ↑                            |
+  ← (lost target, timeout) ←──┘
+
+WANDER → (obstacle < 0.5m) → BACKUP → TURN → WANDER
+```
+
+The node uses a **PID controller** (proportional, integral, derivative) for both angular and linear tracking to smoothly align with and approach detected objects. Once aligned, it triggers the lid motor sequence: open to 145°, hold for 3 seconds, close to 45°.
+
+**Detected object classes:** bottle, wine glass, cup.
+
+## Launch Files
+
+### `full_bringup.launch.py` (Robot-side, runs on Pi)
+
+A single launch file that brings up all hardware and description nodes:
+
+- **OpenCR driver** — motor control for wheels + Dynamixel Motor 3 (lid)
+- **robot\_state\_publisher** — loads the custom URDF and publishes the TF tree
+- **joint\_state\_publisher** — publishes joint states for RViz visualization
+- **LDS-01 LiDAR driver** — starts the 360° laser scanner, publishes `/scan`
+- **USB camera driver** — publishes raw images on `/image_raw`
+
+```bash
+# Single command to launch everything on the robot
+export TURTLEBOT3_MODEL=Waffle
+export LDS_MODEL=LDS-01
+ros2 launch ~/full_bringup.launch.py
+```
+
+### Desktop launch (YOLO + tracker)
+
+```bash
+# Terminal 1: YOLOv8 detection
+ros2 launch yolo_bringup yolo.launch.py device:=cpu input_image_topic:=/image_raw model:=yolov8n.pt
+
+# Terminal 2: Autonomous bottle tracker
+ros2 run final bottle
+```
+
+## LiDAR & Mapping
+
+The LDS-01 LiDAR provides **360-degree field of view** at approximately 5 Hz with a range of 0.12–3.5 m. This full-surround FOV is sufficient for mapping and SLAM.
+
+**In the application**, LiDAR data on `/scan` is used for real-time obstacle avoidance. The `_sector()` method in `bottle.py` reads a configurable angular sector of the scan to detect obstacles in the robot's forward path (default: 120° front arc, threshold 0.5 m).
+
+**For mapping**, the LiDAR is compatible with SLAM Toolbox and Nav2. To generate a map:
+
+```bash
+# Launch SLAM Toolbox (on desktop, while robot is running)
+ros2 launch slam_toolbox online_async_launch.py
+
+# Drive around to build the map (teleop or autonomous wander)
+# Save the map when done
+ros2 run nav2_map_server map_saver_cli -f my_map
+```
+
+## Quick Start Demo (Single Command)
+
+### On the robot (SSH into Pi):
+
+```bash
+export ROS_DOMAIN_ID=23 && export TURTLEBOT3_MODEL=Waffle && export LDS_MODEL=LDS-01 && ros2 launch ~/full_bringup.launch.py
+```
+
+This single command launches all hardware drivers, the URDF description, LiDAR, and camera.
+
+### On the desktop:
+
+```bash
+# Terminal 1: Source and start YOLO
+export ROS_DOMAIN_ID=23 && source /opt/ros/humble/setup.bash && source ~/turtlebot4_ws/install/setup.bash && ros2 launch yolo_bringup yolo.launch.py device:=cpu input_image_topic:=/image_raw model:=yolov8n.pt
+
+# Terminal 2: Start the autonomous tracker
+export ROS_DOMAIN_ID=23 && source /opt/ros/humble/setup.bash && source ~/turtlebot4_ws/install/setup.bash && ros2 run final bottle
+```
+
+Place a bottle, cup, or wine glass in front of the robot. It will detect, track, approach, and activate the lid.
+
+## Teleoperation
+
+The robot supports **keyboard teleoperation** using the standard TurtleBot3 teleop package. This can be used for manual control, testing, or mapping.
+
+```bash
+# Launch teleop (on desktop)
+export TURTLEBOT3_MODEL=Waffle
+ros2 run turtlebot3_teleop teleop_keyboard
+```
+
+**Controls:**
+- `w` / `x` — increase / decrease linear velocity
+- `a` / `d` — increase / decrease angular velocity
+- `s` — stop all motion
+- `Ctrl+C` — quit
+
+> **Note:** Do not run teleop and `bottle.py` at the same time — both publish to `/cmd_vel`. Stop the autonomous node first before switching to teleop.
+
+## RViz Visualization
+
+The **robot body is fully visible in RViz2** via the URDF published by `robot_state_publisher`. The TF tree and robot meshes render the complete robot model including base, wheels, LiDAR, camera, and lid joint.
+
+```bash
+# Launch RViz with the robot model (on desktop)
+export TURTLEBOT3_MODEL=Waffle
+ros2 launch turtlebot3_bringup rviz2.launch.py
+```
+
+**What you'll see in RViz:**
+- **RobotModel** — full 3D mesh of the TurtleBot3 body, wheels, and lid mechanism
+- **TF tree** — all coordinate frames (`base_footprint`, `base_link`, `base_scan`, `camera_link`, `gix_link`, wheel links)
+- **LaserScan** — real-time 360° LiDAR point cloud overlay on topic `/scan`
+- **Camera image** — raw feed on `/image_raw` (add Image display, select topic)
+
+To manually configure RViz2:
+1. Open `rviz2`
+2. Set Fixed Frame to `base_footprint` or `odom`
+3. Add displays: RobotModel, TF, LaserScan (`/scan`), Image (`/image_raw`)
+
+---
 
 ## Hardware
 
-- **Robot:** TurtleBot3 Burger
+- **Robot:** TurtleBot3 Burger (running Waffle firmware for Motor 3 support)
 - **Camera:** USB camera (published on `/image_raw`)
-- **LiDAR:** LDS-01
+- **LiDAR:** LDS-01 — 360° FOV, 5 Hz, 0.12–3.5 m range
 - **Lid Motor:** Dynamixel Motor ID 3 (GIX\_Waffle firmware on OpenCR)
-- **Compute:** Raspberry Pi (onboard) + Desktop PC (YOLO inference)
+- **Compute:** Raspberry Pi 3B+ (onboard) + Desktop PC (YOLO inference)
 
 ## Prerequisites
 
@@ -45,37 +212,6 @@ Set on both machines:
 export ROS_DOMAIN_ID=23
 ```
 
-## Launch Sequence
-
-### 1. TurtleBot3 (SSH into Pi)
-
-```bash
-export TURTLEBOT3_MODEL=Waffle
-export LDS_MODEL=LDS-01
-ros2 launch ~/full_bringup.launch.py
-```
-
-> This launches the GIX hardware bringup (NOT standard `turtlebot3_bringup`) which includes Motor 3 (lid) support.
-
-### 2. Desktop — YOLO Detection (Terminal 1)
-
-```bash
-ros2 launch yolo_bringup yolo.launch.py device:=cpu input_image_topic:=/image_raw model:=yolov8n.pt
-```
-
-### 3. Desktop — Bottle Tracker Node (Terminal 2)
-
-```bash
-ros2 run final bottle
-```
-
-### 4. Desktop — Debug View (Terminal 3, optional)
-
-```bash
-ros2 run rqt_image_view rqt_image_view
-# Select topic: /yolo/dbg_image
-```
-
 ## Parameters (bottle.py)
 
 | Parameter | Value | Description |
@@ -90,77 +226,7 @@ ros2 run rqt_image_view rqt_image_view
 | `WANDER_LIN_VEL` | 0.12 m/s | Wander forward speed |
 | `NO_DETECT_TIMEOUT` | 7 s | Return to wander after losing target |
 
-## Behavior State Machine
-
-```
-WANDER → (object detected) → TRACK → (aligned & close) → AIM
-  ↑                            |
-  ← (lost target, timeout) ←──┘
-
-WANDER → (obstacle < 0.5m) → BACKUP → TURN → WANDER
-```
-
-### Lid Sequence
-
-1. Initialize to 45° (closed)
-2. Open to 145°
-3. Hold for 3 seconds
-4. Close to 45° (grab)
-5. Wait 5 seconds before resuming
-
-## Detected Object Classes
-
-- Bottle
-- Wine glass
-- Cup
-
 ## Usage
-
-### Demo Walkthrough
-
-1. **Power on the TurtleBot3** and wait for the Pi to boot (~30 seconds).
-
-2. **SSH into the Pi** from your desktop:
-   ```bash
-   ssh ubuntu@10.155.234.127
-   ```
-
-3. **Set environment variables and launch** on the Pi:
-   ```bash
-   export ROS_DOMAIN_ID=23
-   export TURTLEBOT3_MODEL=Waffle
-   export LDS_MODEL=LDS-01
-   ros2 launch ~/full_bringup.launch.py
-   ```
-   Wait until you see the LiDAR spinning and no errors in the terminal.
-
-4. **Open three terminals on your desktop.** In each, source your workspace:
-   ```bash
-   export ROS_DOMAIN_ID=23
-   source /opt/ros/humble/setup.bash
-   source ~/turtlebot4_ws/install/setup.bash
-   ```
-
-5. **Terminal 1 — Start YOLO:**
-   ```bash
-   ros2 launch yolo_bringup yolo.launch.py device:=cpu input_image_topic:=/image_raw model:=yolov8n.pt
-   ```
-
-6. **Terminal 2 — Start the bottle tracker:**
-   ```bash
-   ros2 run final bottle
-   ```
-   The robot will begin wandering and avoiding obstacles automatically.
-
-7. **Terminal 3 (optional) — Open the debug camera view:**
-   ```bash
-   ros2 run rqt_image_view rqt_image_view
-   ```
-   Select `/yolo/dbg_image` to see bounding boxes overlaid on the camera feed.
-
-8. **Place a bottle, cup, or wine glass** in the robot's path. The robot will detect it, turn to face it, approach, and trigger the lid sequence.
-
-9. **To stop**, press `Ctrl+C` in Terminal 2 first (stops motion), then shut down the other terminals.
 
 ### Tuning Parameters
 
@@ -221,6 +287,7 @@ No retraining is needed — YOLOv8n already recognizes all 80 COCO classes. You'
 - **Motor 3 not responding:** Ensure OpenCR is flashed with GIX\_Waffle firmware (`~/TECHIN516/project/t516_OpenCR/`). The claw joint name is `gix`, controlled via `/gix_controller/joint_trajectory`.
 - **No YOLO detections:** Verify camera is publishing on `/image_raw`. Check with `ros2 topic echo /image_raw --no-arr`.
 - **Domain ID mismatch:** Confirm `ROS_DOMAIN_ID=23` is set on both Pi and desktop.
+- **Robot not visible in RViz:** Make sure `robot_state_publisher` is running (it launches automatically via `full_bringup.launch.py`). Set Fixed Frame to `base_footprint`. Add a RobotModel display.
 
 ## Team
 
