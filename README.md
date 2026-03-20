@@ -1,6 +1,8 @@
 # The Pelican
 
 TurtleBot3 autonomous bottle-tracking robot with a motorized lid. The robot wanders, detects target objects (bottles, cups, and wine glasses) using YOLOv8, tracks and approaches them, then picks them up with Dynamixel-powered motors.
+<img width="1150" height="762" alt="Screenshot 2026-03-19 at 10 47 08 PM" src="https://github.com/user-attachments/assets/5b74c77f-595d-4575-9f32-78cea165be80" />
+
 
 ## Demo Link
 https://drive.google.com/file/d/1fELpsYOHe1enObhneh7-VH1AN5VL8o85/view?usp=sharing
