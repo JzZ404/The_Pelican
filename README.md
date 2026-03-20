@@ -2,6 +2,9 @@
 
 TurtleBot3 autonomous bottle-tracking robot with a motorized lid. The robot wanders, detects target objects (bottles, cups, and wine glasses) using YOLOv8, tracks and approaches them, then picks them up with Dynamixel-powered motors.
 
+##Demo Link
+https://drive.google.com/file/d/1fELpsYOHe1enObhneh7-VH1AN5VL8o85/view?usp=sharing
+
 ## Feature Checklist
 
 | Requirement | Status | Details |
