@@ -1,8 +1,6 @@
 # The Pelican
 
 The Pelican is an autonomous retrieval system designed to scout its environment for misplaced waste. Built on a TurtleBot3 frame and equipped with a custom motorized lid, it spends its time wandering through a space "hunting" for disposal opportunities. Using a YOLOv8 vision model, the robot identifies specific targets like bottles, cups, and wine glasses, at which point it locks on, tracks the object to get within range, and uses high-torque Dynamixel-powered motors to actuate its lid and scoop the item up.
-
-The Pelican is an autonomous retrieval system designed to scout its environment for misplaced waste. Built on a TurtleBot3 frame and equipped with a custom motorized lid, it spends its time wandering through a space "hunting" for disposal opportunities. Using a YOLOv8 vision model, the robot identifies specific targets like bottles, cups, and wine glasses, at which point it locks on, tracks the object to get within range, and uses high-torque Dynamixel-powered motors to actuate its lid and scoop the item up.
 <img width="1150" height="762" alt="Screenshot 2026-03-19 at 10 47 08 PM" src="https://github.com/user-attachments/assets/5b74c77f-595d-4575-9f32-78cea165be80" />
 
 
